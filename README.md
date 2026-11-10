@@ -1,8 +1,8 @@
 # System Design Labs
 
-Eleven small, hands-on projects that turn system design vocabulary into implementation experience, including three AI/LLM systems.
+Eleven small, hands-on projects for learning how distributed systems behave by building them, breaking them, and measuring what happens. Three of them are AI/LLM systems.
 
-"Put a cache in front of it" is vocabulary. "When I load-tested my cache, a burst of misses on one hot key took Postgres from 4 ms to 900 ms p99, so I added request coalescing" is experience. Every project here is built to produce at least one sentence like that.
+It's easy to know that you should put a cache in front of a database. It's more useful to have watched a burst of misses on one hot key take the database down, measured it, and fixed it. Each project builds one component, pushes it until it fails, and records the numbers.
 
 ## How each project works: build → break → write
 
@@ -79,21 +79,20 @@ Each project ends with a one-page doc in `docs/` covering:
 3. **What broke**: each failure caused, what happened, and the numbers.
 4. **What I fixed**, with measured before/after.
 5. **At 100× scale**: what changes first, and why.
-6. **Interview answers**: the questions this project prepares for.
+6. **Open questions**: what I'd do differently, and what I'd want to learn next.
 
-## Interview question index
+## Questions each project answers
 
-| Question                                         | Project(s) |
-| ------------------------------------------------ | ---------- |
-| Design a URL shortener                           | 1, 10      |
-| Design a rate limiter                            | 2          |
-| Design Dropbox / file upload                     | 3          |
-| Design a notification system                     | 3, 8       |
-| Design login / SSO                               | 4          |
-| Design WhatsApp / Slack                          | 7, 4       |
-| Design an e-commerce order system                | 8, 10      |
-| Design typeahead / product search                | 9, 5       |
-| Scale the database                               | 10         |
-| Design a support bot over docs / enterprise RAG  | 5          |
-| Design ChatGPT / serve LLM features at scale     | 6, 7       |
-| Design an AI agent                               | 11         |
+| Question                                                        | Project(s) |
+| --------------------------------------------------------------- | ---------- |
+| What actually happens to p99 latency when the cache goes cold?  | 1          |
+| How do you share state across horizontally scaled servers?      | 2          |
+| If delivery is at-least-once, how do you avoid doing work twice? | 3, 8       |
+| JWTs or sessions, and how do you revoke a token?                | 4          |
+| How do you know a RAG system is retrieving the right thing?     | 5          |
+| What happens when the model provider is down or overloaded?     | 6          |
+| How does a message reach a user connected to a different server? | 7          |
+| How do you write to a database and publish an event reliably?   | 8          |
+| How do you keep a search index in sync with its source of truth? | 9          |
+| What consistency does a read replica give you?                  | 10         |
+| How do you stop an agent from taking actions it shouldn't?      | 11         |
