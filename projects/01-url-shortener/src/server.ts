@@ -1,4 +1,5 @@
-import express from 'express';
+import express, { type ErrorRequestHandler } from 'express';
+import { pool } from './db.ts';
 
 const PORT = 3000;
 const app = express();
@@ -29,11 +30,6 @@ function toBase62(n: bigint): string {
   return digits.reverse().join('');
 }
 
-type Link = { url: string; clicks: number };
-
-const links = new Map<string, Link>();
-let nextId = 1n;
-
 function parseHttpUrl(input: unknown): URL | null {
   if (typeof input !== 'string') return null;
   const url = URL.parse(input);
@@ -44,42 +40,94 @@ function parseHttpUrl(input: unknown): URL | null {
 
 app.use(express.json());
 
-app.get('/healthz', (_req, res) => {
-  res.json({ status: 'ok' });
+app.get('/healthz', async (_req, res) => {
+  await pool.query('select 1');
+  res.json({ status: 'ok', database: 'ok' });
 });
 
-app.post('/links', (req, res) => {
+app.post('/links', async (req, res) => {
   const url = parseHttpUrl(req.body?.url);
   if (url === null) {
     res.status(400).json({ error: 'url must be an absolute http(s) URL' });
     return;
   }
 
-  const code = toBase62(nextId++);
-  links.set(code, { url: url.href, clicks: 0 });
+  const idResult = await pool.query<{ id: string }>(
+    "select nextval(pg_get_serial_sequence('links', 'id')) as id",
+  );
+  const id = idResult.rows[0]?.id;
+  if (id === undefined) throw new Error('nextval returned no row');
+
+  const code = toBase62(BigInt(id));
+  await pool.query('insert into links (id, code, url) values ($1, $2, $3)', [
+    id,
+    code,
+    url.href,
+  ]);
+
   res.status(201).json({ code, shortUrl: `http://localhost:${PORT}/${code}` });
 });
 
-app.get('/links/:code/stats', (req, res) => {
+app.get('/links/:code/stats', async (req, res) => {
   const { code } = req.params;
-  const link = links.get(code);
+  const result = await pool.query<{ url: string; clicks: number }>(
+    `select url,
+            (select count(*) from clicks where clicks.link_id = links.id)::int as clicks
+       from links
+      where code = $1`,
+    [code],
+  );
+  const link = result.rows[0];
   if (link === undefined) {
     res.status(404).json({ error: 'link not found' });
     return;
   }
+
   res.json({ code, url: link.url, clicks: link.clicks });
 });
 
-app.get('/:code', (req, res) => {
-  const link = links.get(req.params.code);
+app.get('/:code', async (req, res) => {
+  const result = await pool.query<{ id: string; url: string }>(
+    'select id, url from links where code = $1',
+    [req.params.code],
+  );
+  const link = result.rows[0];
   if (link === undefined) {
-    res.status(404).json({ error: 'link not found' });
+    res.status(404).json({ error: 'link no found' });
     return;
   }
 
-  link.clicks++;
+  await pool.query('insert into clicks (link_id) values ($1)', [link.id]);
   res.redirect(302, link.url);
 });
+
+function clientErrorStatus(error: unknown): number | null {
+  if (typeof error !== 'object' || error === null || !('status' in error)) {
+    return null;
+  }
+  const { status } = error;
+  if (typeof status !== 'number' || status < 400 || status >= 500) return null;
+
+  return status;
+}
+
+const handleError: ErrorRequestHandler = (error, _seq, res, next) => {
+  if (res.headersSent) {
+    next(error); // what does next do?
+    return;
+  }
+
+  const status = clientErrorStatus(error);
+  if (status !== null) {
+    res.status(status).json({ error: 'invalid request' });
+    return;
+  }
+
+  console.error(error);
+  res.status(500).json({ error: 'internal server error' });
+};
+
+app.use(handleError);
 
 app.listen(PORT, () => {
   console.log(`Listening on http://localhost:${PORT}`);
